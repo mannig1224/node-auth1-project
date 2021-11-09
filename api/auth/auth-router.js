@@ -1,14 +1,20 @@
 // Require `checkUsernameFree`, `checkUsernameExists` and `checkPasswordLength`
 // middleware functions from `auth-middleware.js`. You will need them here!
 const router = require("express").Router();
-const { add, findBy } = require('../users/users-model');
 const bcrypt = require('bcryptjs')
 const User = require('../users/users-model')
 
-router.post('/register', async (req, res, next) => {
+const {
+  checkPasswordLength,
+  checkUsernameExists,
+  checkUsernameFree
+} = require('./auth-middleware')
+
+router.post('/register', checkPasswordLength, checkUsernameFree, async (req, res, next) => {
   try {
     const { username, password } = req.body
-    const hash = bcrypt.hashSync(password, 6)
+    const hash = bcrypt.hashSync(password, 8)
+
     const newUser = { username, password: hash}
     const user = await User.add(newUser);
     res.status(200).json(user);
@@ -17,20 +23,17 @@ router.post('/register', async (req, res, next) => {
   }
 })
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkUsernameExists, async (req, res, next) => {
   try {
-    const { username, password } = req.body
-    const [user] = await User.findBy ({ username })
-    if (user && bcrypt.compareSync(password, user.password)) {
-      console.log(user)
-      console.log(req.session)  
-
-      req.session.user = user;
+    const { password } = req.body
+    if (bcrypt.compareSync(password, req.user.password)) {
+       
+      req.session.user = req.user;
       // a cookie will be set on the response
       // the session will be stored
-      res.json({ message: `Welcome ${username}!`})
+      res.json({ message: `Welcome ${req.user.username}!`})
     } else {
-      next({status: 401, message: "bad credentials"})
+      next({status: 401, message: "Invalid credentials"})
     }
   } catch (err) {
     next(err)
@@ -39,16 +42,15 @@ router.post('/login', async (req, res, next) => {
 
 router.get('/logout', async (req, res, next) => {
   if(req.session.user) {
-    // destory the session
     req.session.destroy(err => {
       if (err) {
-        res.json({ message: 'sorry, you cannot leave'})
+        next(err)
       } else {
-        res.json({ message: 'bye'})
+        res.json({ message: 'logged out'})
       }
     })
   } else {
-    res.json( { message: 'but i do not know you!'} )
+    res.json( { message: 'no session'} )
   }
 })
 
