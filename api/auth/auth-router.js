@@ -1,6 +1,58 @@
 // Require `checkUsernameFree`, `checkUsernameExists` and `checkPasswordLength`
 // middleware functions from `auth-middleware.js`. You will need them here!
+const router = require("express").Router();
+const { add, findBy } = require('../users/users-model');
+const bcrypt = require('bcryptjs')
+const User = require('../users/users-model')
 
+router.post('/register', async (req, res, next) => {
+  try {
+    const { username, password } = req.body
+    const hash = bcrypt.hashSync(password, 6)
+    const newUser = { username, password: hash}
+    const user = await User.add(newUser);
+    res.status(200).json(user);
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/login', async (req, res, next) => {
+  try {
+    const { username, password } = req.body
+    const [user] = await User.findBy ({ username })
+    if (user && bcrypt.compareSync(password, user.password)) {
+      console.log(user)
+      console.log(req.session)  
+
+      req.session.user = user;
+      // a cookie will be set on the response
+      // the session will be stored
+      res.json({ message: `Welcome ${username}!`})
+    } else {
+      next({status: 401, message: "bad credentials"})
+    }
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/logout', async (req, res, next) => {
+  if(req.session.user) {
+    // destory the session
+    req.session.destroy(err => {
+      if (err) {
+        res.json({ message: 'sorry, you cannot leave'})
+      } else {
+        res.json({ message: 'bye'})
+      }
+    })
+  } else {
+    res.json( { message: 'but i do not know you!'} )
+  }
+})
+
+module.exports = router
 
 /**
   1 [POST] /api/auth/register { "username": "sue", "password": "1234" }
